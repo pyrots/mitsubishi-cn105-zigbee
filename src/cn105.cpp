@@ -5,19 +5,22 @@
 
 #include <HeatPump.h>
 
-HardwareSerial CN105Serial(1);
-HeatPump hp;
+static HardwareSerial CN105Serial(1);
+static HeatPump hp;
 
-static ClimateMode heatPumpModeToClimateMode(const String &mode)
+ClimateMode CN105::heatPumpModeToClimateMode(const char* mode) const
 {
-  if (mode == "HEAT") return MODE_HEAT;
-  if (mode == "COOL") return MODE_COOL;
-  if (mode == "DRY")  return MODE_DRY;
-  if (mode == "FAN")  return MODE_FAN;
+  if (mode == nullptr) return MODE_AUTO;
+
+  if (strcmp(mode, "HEAT") == 0) return MODE_HEAT;
+  if (strcmp(mode, "COOL") == 0) return MODE_COOL;
+  if (strcmp(mode, "DRY")  == 0) return MODE_DRY;
+  if (strcmp(mode, "FAN")  == 0) return MODE_FAN;
+
   return MODE_AUTO;
 }
 
-static const char* climateModeToHeatPumpMode(ClimateMode mode)
+const char* CN105::climateModeToHeatPumpMode(ClimateMode mode) const
 {
   switch (mode)
   {
@@ -34,14 +37,7 @@ void CN105::begin()
 {
   Serial.println("[CN105] Initialisation");
 
-  CN105Serial.begin(
-    CN105_BAUDRATE,
-    SERIAL_8E1,
-    CN105_RX_PIN,
-    CN105_TX_PIN
-  );
-
-  hp.connect(&CN105Serial);
+  hp.connect(&CN105Serial, CN105_BAUDRATE, CN105_RX_PIN, CN105_TX_PIN);
 
   hp.enableExternalUpdate();
   hp.setFastSync(true);
@@ -53,80 +49,171 @@ void CN105::loop()
 {
   hp.sync();
 
-  heatpumpSettings current = hp.getSettings();
+  heatpumpSettings settings = hp.getSettings();
+  heatpumpStatus status = hp.getStatus();
 
-  _power = (String(current.power) == "ON");
-  _mode = heatPumpModeToClimateMode(String(current.mode));
-  _targetTemperature = current.temperature;
-  _roomTemperature = current.roomTemperature;
+  _power = settings.power && strcmp(settings.power, "ON") == 0;
+  _connected = settings.connected;
+  _operating = status.operating;
 
+  _mode = heatPumpModeToClimateMode(settings.mode);
+
+  _targetTemperature = settings.temperature;
+  _roomTemperature = status.roomTemperature;
+
+  _fanMode = settings.fan ? settings.fan : "AUTO";
+  _vaneMode = settings.vane ? settings.vane : "AUTO";
+  _wideVaneMode = settings.wideVane ? settings.wideVane : "|";
+
+  updateClimateState();
+}
+
+void CN105::updateClimateState()
+{
   climateState.power = _power;
+  climateState.connected = _connected;
+  climateState.operating = _operating;
+
   climateState.mode = _mode;
+
   climateState.targetTemperature = _targetTemperature;
   climateState.roomTemperature = _roomTemperature;
-  climateState.fanMode = String(current.fan);
-  climateState.vaneMode = String(current.vane);
+
+  climateState.fanMode = _fanMode;
+  climateState.vaneMode = _vaneMode;
+  climateState.wideVaneMode = _wideVaneMode;
+
   climateState.lastUpdate = millis();
 }
 
-bool CN105::getPower()
+bool CN105::getPower() const
 {
   return _power;
 }
 
-ClimateMode CN105::getMode()
+bool CN105::isConnected() const
+{
+  return _connected;
+}
+
+bool CN105::isOperating() const
+{
+  return _operating;
+}
+
+ClimateMode CN105::getMode() const
 {
   return _mode;
 }
 
-float CN105::getTargetTemperature()
+float CN105::getTargetTemperature() const
 {
   return _targetTemperature;
 }
 
-float CN105::getRoomTemperature()
+float CN105::getRoomTemperature() const
 {
   return _roomTemperature;
 }
 
+const char* CN105::getFanMode() const
+{
+  return _fanMode;
+}
+
+const char* CN105::getVaneMode() const
+{
+  return _vaneMode;
+}
+
+const char* CN105::getWideVaneMode() const
+{
+  return _wideVaneMode;
+}
+
 void CN105::setPower(bool on)
 {
-  heatpumpSettings s = hp.getSettings();
+  heatpumpSettings settings = hp.getSettings();
 
-  s.power = on ? "ON" : "OFF";
+  settings.power = on ? "ON" : "OFF";
 
-  hp.setSettings(s);
+  hp.setSettings(settings);
   hp.update();
 
   _power = on;
-  climateState.power = _power;
-  climateState.lastUpdate = millis();
+  updateClimateState();
 }
 
 void CN105::setMode(ClimateMode mode)
 {
-  heatpumpSettings s = hp.getSettings();
+  heatpumpSettings settings = hp.getSettings();
 
-  s.mode = climateModeToHeatPumpMode(mode);
+  settings.mode = climateModeToHeatPumpMode(mode);
 
-  hp.setSettings(s);
+  hp.setSettings(settings);
   hp.update();
 
   _mode = mode;
-  climateState.mode = _mode;
-  climateState.lastUpdate = millis();
+  updateClimateState();
 }
 
 void CN105::setTargetTemperature(float temperature)
 {
-  heatpumpSettings s = hp.getSettings();
+  if (temperature < 16.0) temperature = 16.0;
+  if (temperature > 31.0) temperature = 31.0;
 
-  s.temperature = temperature;
+  heatpumpSettings settings = hp.getSettings();
 
-  hp.setSettings(s);
+  settings.temperature = temperature;
+
+  hp.setSettings(settings);
   hp.update();
 
   _targetTemperature = temperature;
-  climateState.targetTemperature = _targetTemperature;
-  climateState.lastUpdate = millis();
+  updateClimateState();
+}
+
+void CN105::setFanMode(const char* fan)
+{
+  if (fan == nullptr) return;
+
+  heatpumpSettings settings = hp.getSettings();
+
+  settings.fan = fan;
+
+  hp.setSettings(settings);
+  hp.update();
+
+  _fanMode = fan;
+  updateClimateState();
+}
+
+void CN105::setVaneMode(const char* vane)
+{
+  if (vane == nullptr) return;
+
+  heatpumpSettings settings = hp.getSettings();
+
+  settings.vane = vane;
+
+  hp.setSettings(settings);
+  hp.update();
+
+  _vaneMode = vane;
+  updateClimateState();
+}
+
+void CN105::setWideVaneMode(const char* wideVane)
+{
+  if (wideVane == nullptr) return;
+
+  heatpumpSettings settings = hp.getSettings();
+
+  settings.wideVane = wideVane;
+
+  hp.setSettings(settings);
+  hp.update();
+
+  _wideVaneMode = wideVane;
+  updateClimateState();
 }

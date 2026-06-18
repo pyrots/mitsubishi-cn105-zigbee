@@ -1,20 +1,24 @@
 #ifndef CLIMATE_STATE_H
 #define CLIMATE_STATE_H
 
+#include <Arduino.h>
 #include "cn105.h"
 
 struct ClimateState {
-    bool power = false;
+  bool power = false;
+  bool connected = false;
+  bool operating = false;
 
-    ClimateMode mode = MODE_AUTO;
+  ClimateMode mode = MODE_AUTO;
 
-    float roomTemperature = 0.0;
-    float targetTemperature = 21.0;
+  float targetTemperature = 21.0;
+  float roomTemperature = 0.0;
 
-    String fanMode = "AUTO";
-    String vaneMode = "AUTO";
+  String fanMode = "AUTO";
+  String vaneMode = "AUTO";
+  String wideVaneMode = "|";
 
-    unsigned long lastUpdate = 0;
+  unsigned long lastUpdate = 0;
 };
 
 extern ClimateState climateState;
