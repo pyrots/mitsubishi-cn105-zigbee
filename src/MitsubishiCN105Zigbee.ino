@@ -3,39 +3,23 @@
 #include "version.h"
 #include "config.h"
 #include "cn105.h"
-
-// ======================================================
-// Objets globaux
-// ======================================================
+#include "climate_state.h"
 
 CN105 cn105;
 
-// ======================================================
-// Timers
-// ======================================================
-
 unsigned long lastHeartbeat = 0;
 unsigned long lastStatusPrint = 0;
-
-// ======================================================
-// Fonctions utilitaires
-// ======================================================
 
 const char* modeToString(ClimateMode mode)
 {
   switch (mode)
   {
-    case MODE_HEAT:
-      return "HEAT";
-    case MODE_COOL:
-      return "COOL";
-    case MODE_DRY:
-      return "DRY";
-    case MODE_FAN:
-      return "FAN";
+    case MODE_HEAT: return "HEAT";
+    case MODE_COOL: return "COOL";
+    case MODE_DRY:  return "DRY";
+    case MODE_FAN:  return "FAN";
     case MODE_AUTO:
-    default:
-      return "AUTO";
+    default:        return "AUTO";
   }
 }
 
@@ -66,27 +50,37 @@ void printBanner()
 void printStatus()
 {
   Serial.println();
-  Serial.println("------------ CN105 STATUS ------------");
+  Serial.println("------------ CLIMATE STATE ------------");
 
   Serial.print("Power        : ");
-  Serial.println(cn105.getPower() ? "ON" : "OFF");
+  Serial.println(climateState.power ? "ON" : "OFF");
 
   Serial.print("Mode         : ");
-  Serial.println(modeToString(cn105.getMode()));
+  Serial.println(modeToString(climateState.mode));
 
   Serial.print("Target temp  : ");
-  Serial.print(cn105.getTargetTemperature(), 1);
+  Serial.print(climateState.targetTemperature, 1);
   Serial.println(" °C");
 
   Serial.print("Room temp    : ");
-  Serial.print(cn105.getRoomTemperature(), 1);
+  Serial.print(climateState.roomTemperature, 1);
   Serial.println(" °C");
+
+  Serial.print("Fan          : ");
+  Serial.println(climateState.fanMode);
+
+  Serial.print("Vane         : ");
+  Serial.println(climateState.vaneMode);
+
+  Serial.print("Last update  : ");
+  Serial.print(climateState.lastUpdate);
+  Serial.println(" ms");
 
   Serial.print("Uptime       : ");
   Serial.print(millis() / 1000);
   Serial.println(" s");
 
-  Serial.println("---------------------------------------");
+  Serial.println("----------------------------------------");
 }
 
 void heartbeat()
@@ -99,10 +93,6 @@ void heartbeat()
     lastHeartbeat = now;
   }
 }
-
-// ======================================================
-// SETUP
-// ======================================================
 
 void setup()
 {
@@ -122,10 +112,6 @@ void setup()
   Serial.println("[BOOT] Démarrage terminé.");
 }
 
-// ======================================================
-// LOOP
-// ======================================================
-
 void loop()
 {
   cn105.loop();
@@ -139,7 +125,6 @@ void loop()
     lastStatusPrint = now;
   }
 
-  // Réservé pour factory reset Zigbee plus tard
   if (digitalRead(BUTTON_PIN) == LOW)
   {
     Serial.println("[BUTTON] Bouton pressé - action réservée v0.2/v0.3");
